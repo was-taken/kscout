@@ -1,0 +1,24 @@
+# Render Blueprint: https://render.com/docs/blueprint-spec
+# Creates the web service; Render asks for the secret values when you deploy.
+services:
+  - type: web
+    name: kscout
+    runtime: node
+    plan: free
+    buildCommand: "true"
+    startCommand: node server.js
+    healthCheckPath: /healthz
+    envVars:
+      - key: PUBLIC_SITE
+        value: "1"
+      - key: ROBOTEVENTS_TOKEN
+        sync: false
+      - key: TEAM_PASSWORD
+        sync: false
+    # Shared team notes need a persistent disk (paid plans only on Render).
+    # To keep notes across restarts, switch to a paid plan and uncomment:
+    # disk:
+    #   name: kscout-data
+    #   mountPath: /var/data
+    #   sizeGB: 1
+    # and add an env var: DATA_DIR=/var/data

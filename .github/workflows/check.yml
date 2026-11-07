@@ -1,0 +1,22 @@
+name: Check
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Syntax check
+        run: npm run check
+      - name: Server starts and answers
+        run: |
+          PUBLIC_SITE=1 PORT=8080 node server.js &
+          for i in $(seq 1 20); do curl -fsS http://127.0.0.1:8080/healthz && break; sleep 0.5; done
+          curl -fsS http://127.0.0.1:8080/ | grep -q "<title>KScout</title>"
+          curl -fsS http://127.0.0.1:8080/local/status | grep -q '"tokenEditable":false'

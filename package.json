@@ -1,0 +1,16 @@
+{
+  "name": "kscout",
+  "version": "1.0.0",
+  "description": "Scouting dashboard for the VEX V5 Robotics Competition, powered by the VEX Events API.",
+  "private": true,
+  "license": "MIT",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "check": "node --check server.js && node --check public/data.js && node --check public/app.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": ["vex", "v5rc", "robotics", "scouting", "robotevents"]
+}

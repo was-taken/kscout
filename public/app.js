@@ -677,7 +677,7 @@ function renderWatchlist() {
     const csv = ['team,watching,rating,tags,notes,updated', ...list.map((r) => [r.num, r.starred ? 'yes' : '', r.rating || '', (r.tags || []).join('; '), r.text, r.updated].map(q).join(','))].join('\n');
     const a = document.createElement('a');
     a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
-    a.download = 'v5rc-scouting-notes.csv'; a.click();
+    a.download = 'kscout-notes.csv'; a.click();
   });
 }
 
