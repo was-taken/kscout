@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>KScout</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <div class="shell">
+    <aside class="side" id="side">
+      <a class="side-brand" href="#/"><svg class="logo" viewBox="0 0 24 24" aria-hidden="true"><rect width="24" height="24" rx="6" fill="var(--btn)"/><path d="M8 6.5v11M10.6 12l5.4-5.5M10.6 12l5.4 5.5" stroke="var(--btn-text)" stroke-width="2.3" stroke-linecap="round" fill="none"/><circle cx="10.6" cy="12" r="2.3" fill="var(--s1)" stroke="var(--btn)" stroke-width="1.2"/></svg><span>KScout</span></a>
+
+      <form id="searchForm" class="side-search" autocomplete="off" role="search">
+        <span class="ico" data-icon="search"></span>
+        <input id="searchInput" placeholder="Team or event SKU" aria-label="Search a team number or event SKU" />
+        <kbd>/</kbd>
+      </form>
+
+      <nav class="side-nav">
+        <a href="#/" data-nav="home"><span class="ico" data-icon="home"></span>Home</a>
+        <a href="#/watchlist" data-nav="watchlist"><span class="ico" data-icon="star"></span>Watchlist</a>
+        <a href="#/compare" data-nav="compare"><span class="ico" data-icon="columns"></span>Compare</a>
+      </nav>
+
+      <div class="side-sec">Watching</div>
+      <div class="side-list" id="sideWatch"></div>
+
+      <div class="side-sec">Recent</div>
+      <div class="side-list" id="sideRecent"></div>
+
+      <div class="side-foot">
+        <label class="side-season"><span>Season</span>
+          <select id="seasonSelect" aria-label="Season"></select>
+        </label>
+        <a href="#/settings" data-nav="settings"><span class="ico" data-icon="sliders"></span>Settings</a>
+        <div class="side-note">Data from VEX Events</div>
+      </div>
+    </aside>
+    <div class="scrim" id="scrim"></div>
+
+    <div class="main">
+      <header class="top">
+        <button class="icon-btn menu-btn" id="menuBtn" aria-label="Open menu"><span class="ico" data-icon="menu"></span></button>
+        <div class="crumbs" id="crumbs"></div>
+        <div class="top-actions" id="topActions"></div>
+      </header>
+      <main id="app"><div class="loading">Loading…</div></main>
+    </div>
+  </div>
+  <script src="/data.js"></script>
+  <script src="/app.js"></script>
+</body>
+</html>

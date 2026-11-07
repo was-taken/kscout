@@ -1,0 +1,10 @@
+.env
+data/
+
+# local Claude Code config and installed skills (not part of the app)
+.claude/
+.agents/
+skills-lock.json
+
+.DS_Store
+node_modules/
