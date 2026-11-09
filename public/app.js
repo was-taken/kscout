@@ -14,6 +14,7 @@ const ICONS = {
   sliders: '<path d="M4 7h9M17 7h3M4 12h3M11 12h9M4 17h11M19 17h1"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="17" cy="17" r="2"/>',
   external: '<path d="M14 4.5h5.5V10M19.5 4.5l-8.5 8.5M18 14v4.5a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 4 18.5v-11A1.5 1.5 0 0 1 5.5 6H10"/>',
   menu: '<path d="M4 7h16M4 12h16M4 17h16"/>',
+  rank: '<path d="M5 20v-6M12 20V5M19 20v-9"/>',
   up: '<path d="M12 19V5M6 11l6-6 6 6"/>',
   down: '<path d="M12 5v14M6 13l6 6 6-6"/>',
   download: '<path d="M12 4v11M7 10l5 5 5-5M5 19.5h14"/>',
@@ -407,6 +408,7 @@ async function renderTeam(number) {
     </div></div>
     <div class="dash">
       <div class="grid">
+        ${card({ cls: 'c12', id: 'ratingCard', title: 'KScout rating', aside: '<a class="lnk" href="#/rankings">How it works</a>', body: '<div id="ratingBody" class="muted">Working out rating…</div>' })}
         ${card({ cls: 'c8', title: 'Scores per match', aside: `${s.played} scored matches`, body: '<div id="trend"></div>' })}
         ${card({ cls: 'c4', title: 'Match results', aside: `${pct(s.winRate)} win rate`, body: '<div id="donut"></div>' })}
         ${statCard({ title: 'Win rate', label: 'This season', value: pct(s.winRate), pill: pill(`Quals ${s.qw}-${s.ql}-${s.qt} · Elims ${s.ew}-${s.el}-${s.et}`) })}
@@ -431,6 +433,10 @@ async function renderTeam(number) {
   };
   document.getElementById('starBtn').addEventListener('click', onStar);
   bindNotes(team.number);
+  loadRating(team, d, state.seasonId).then(
+    (r) => { const el = document.getElementById('ratingBody'); if (el) { el.classList.remove('muted'); el.innerHTML = ratingHtml(r); } },
+    () => { const el = document.getElementById('ratingBody'); if (el) el.textContent = 'The rating could not be loaded. Reload the page to try again.'; },
+  );
 
   lineChart(document.getElementById('trend'), s.series, [
     { key: 'y', name: 'Alliance score', color: 'var(--s1)' },
@@ -618,9 +624,11 @@ function renderPrescout(body, aside, teams) {
   const draw = (rows) => {
     aside.textContent = `Season to date · ${rows.length} teams`;
     sortableTable(body, [
+      { key: 'place', label: '#', num: true, val: (r) => r.place },
       { key: 'num', label: 'Team', val: (r) => r.team.number, html: (r) => teamLink(r.team.number) + (note(r.team.number).starred ? ' <span class="stars">★</span>' : '') },
       { key: 'name', label: 'Name', val: (r) => r.team.team_name },
       { key: 'loc', label: 'Region', val: (r) => r.team.location?.region || r.team.location?.country || '' },
+      { key: 'kr', label: 'KScout', num: true, val: (r) => r.kr?.rating, html: (r) => (r.kr ? `<b>${fmt1(r.kr.rating)}</b>` : '<span class="muted">—</span>') },
       { key: 'ev', label: 'Events', num: true, val: (r) => r.eventsAttended },
       { key: 'rec', label: 'W-L-T', val: (r) => r.winRate, html: (r) => `${r.w}-${r.l}-${r.t}` },
       { key: 'wr', label: 'Win %', num: true, val: (r) => r.winRate, html: (r) => pct(r.winRate) },
@@ -630,10 +638,10 @@ function renderPrescout(body, aside, teams) {
       { key: 'skills', label: 'Best skills', num: true, val: (r) => r.bestSkills || null },
       { key: 'awards', label: 'Awards', num: true, val: (r) => r.awards.length },
       { key: 'my', label: 'My rating', val: (r) => note(r.team.number).rating || null, html: (r) => ratingStars(note(r.team.number).rating) },
-    ], rows, { sortKey: 'skills' });
+    ], rows, { sortKey: 'kr' });
   };
   if (prescoutCache.has(key)) return draw(prescoutCache.get(key));
-  body.innerHTML = `<div class="card-b"><p style="margin-top:0">Load season stats for all ${teams.length} registered teams: record, average score, best skills, awards and average rank. This makes several requests per team, so the first load can take a minute.</p>
+  body.innerHTML = `<div class="card-b"><p style="margin-top:0">Rank all ${teams.length} registered teams by KScout rating, with their record, average score, best skills, awards and average rank. This makes many requests, so the first load can take a few minutes.</p>
     <button class="btn primary" id="psGo">Load season stats</button> <span class="muted" id="psProg" style="margin-left:8px"></span>
     <div class="progress"><i id="psBar"></i></div></div>`;
   body.querySelector('#psGo').addEventListener('click', async (e) => {
@@ -642,12 +650,14 @@ function renderPrescout(body, aside, teams) {
     try {
       const rows = await pool(teams, 3, async (t) => {
         const d = await loadTeamSeason(t.id, state.seasonId);
+        const kr = await loadRating(t, d, state.seasonId);
         done++;
         const p = document.getElementById('psProg'), b = document.getElementById('psBar');
         if (p) p.textContent = `${done} of ${teams.length}`;
         if (b) b.style.width = `${(done / teams.length) * 100}%`;
-        return summarize(t, d);
+        return { ...summarize(t, d), kr };
       });
+      assignPlaces(rows, (r) => r.kr?.rating ?? null);
       prescoutCache.set(key, rows);
       if (body.isConnected) draw(rows);
     } catch (err) { body.insertAdjacentHTML('afterbegin', `<div class="error" style="margin:14px">${esc(err.message)}</div>`); e.target.disabled = false; }
@@ -698,10 +708,13 @@ async function renderCompare(query) {
   out.innerHTML = '<div class="loading">Loading teams…</div>';
   const sums = await Promise.all(nums.slice(0, 6).map(async (n) => {
     const t = await findTeam(n);
-    return t ? summarize(t, await loadTeamSeason(t.id, state.seasonId)) : { missing: n };
+    if (!t) return { missing: n };
+    const d = await loadTeamSeason(t.id, state.seasonId);
+    return { ...summarize(t, d), kr: await loadRating(t, d, state.seasonId).catch(() => null) };
   }));
   const ok = sums.filter((s) => !s.missing);
   const metrics = [
+    ['KScout rating', (s) => s.kr?.rating ?? null, fmt1, 'max'],
     ['Win rate', (s) => s.winRate, pct, 'max'],
     ['Record', () => null, (_, s) => `${s.w}-${s.l}-${s.t}`],
     ['Matches played', (s) => s.played, fmt0],
@@ -729,6 +742,110 @@ async function renderCompare(query) {
     </tbody></table></div>` })}`;
 }
 
+// ---------------------------------------------------------------- views: KScout rating
+const RATING_MAX_TEAMS = 150;
+const measurePct = (v) => (v == null ? '—' : `${Math.round(v * 100)}%`);
+
+function ratingHtml(r) {
+  if (!r) return '<div class="muted">No rating yet. A team needs at least one finished event with qualification matches.</div>';
+  const meter = (label, v) => `<div class="meter"><div class="meter-h"><span>${label}</span><b>${measurePct(v)}</b></div><div class="meter-t"><i style="width:${v == null ? 0 : Math.round(v * 100)}%"></i></div></div>`;
+  const meters = meter('Skills vs season top', r.skillsPart) + Object.entries(RATING_LABELS).map(([k, label]) => meter(label, r.breakdown[k])).join('');
+  return `<div class="rating">
+      <div class="rating-n"><div class="big">${fmt1(r.rating)}</div><div class="lbl">out of 100</div>${pill(`${r.confidence} confidence`)}</div>
+      <div class="rating-m">${meters}<div class="rating-note">${r.skillsReference ? `Skills: best ${r.skillsBest} of the season's top ${r.skillsReference}. ` : 'No finished Signature event yet, so skills aren\'t counted. '}The others show the share of the division beaten, weighted toward recent events.</div></div>
+    </div>
+    <details class="rating-ev"><summary>${r.events.length} event${r.events.length === 1 ? '' : 's'} counted</summary>
+      <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Event</th><th>Level</th><th class="num">Teams</th><th class="num">Beat</th><th class="num">Event score</th><th class="num">Weight</th></tr></thead><tbody>
+      ${r.events.map((e) => `<tr><td><a class="lnk" href="#/event/${encodeURIComponent(e.event.sku)}">${esc(e.event.name)}</a></td><td>${esc(e.event.level || 'Other')}</td><td class="num">${e.size}</td><td class="num">${measurePct(e.percentile)}</td><td class="num">${fmt1(e.score)}</td><td class="num">${e.weight.toFixed(2)}</td></tr>`).join('')}
+      </tbody></table></div></details>`;
+}
+
+function ratingExplainer() {
+  const w = Object.entries(RATING.weights).map(([k, v]) => `${Math.round(v * 100)}% ${RATING_LABELS[k].toLowerCase()}`).join(', ');
+  const skillsPct = Math.round(RATING.skillsShare * 100);
+  const t = (l) => RATING.tiers[l].join('–');
+  return `<div class="prose">
+    <p>The KScout rating is one number from 0 to 100 for how strong a team has been this season. ${100 - skillsPct}% comes from match results and ${skillsPct}% from Robot Skills.</p>
+    <ol>
+      <li><b>Place the team in its division at each event.</b> ${w}. Each is the share of the division the team beat. Match contribution is CCWM (OPR minus DPR), which separates a team from its partners. A measure with no data at an event is left out and the others are scaled up.</li>
+      <li><b>Allow for how hard the event was.</b> The result is scaled to a range for the event's level: Worlds ${t('World')}, Signature or National ${t('Signature')}, State or Regional ${t('State')}, other tournaments ${t('Other')}.</li>
+      <li><b>Combine the events.</b> Each older event counts ${Math.round(RATING.recency * 100)}% as much as the one after it, and divisions under ${RATING.fullFieldSize} teams count proportionally less. One average event (${RATING.priorScore}) is added to every team's history, so a single good day can't top the list. This is the results score.</li>
+      <li><b>Add Robot Skills.</b> The team's best driver + autonomous total this season, as a share of the top total at any finished Signature event or Worlds, counts for ${skillsPct}%. If the season has no finished event of that kind yet, the rating is the results score alone.</li>
+    </ol>
+    <p>Tested on two 2026 Worlds divisions (Science and Technology), using only results from before Worlds. Picking the alliance with the higher combined rating called 73% of qualification matches. Best skills alone called 67–69% and win rate 61–64%.</p>
+    <p class="muted">It only sees what the results show. A team's real strength can differ, especially early in the season or if the robot has changed. VEX Events has no way to load every team at once, so rankings cover a group you choose rather than the whole world.</p>
+  </div>`;
+}
+
+/** Turns "RE-V5RC-…" or "1234A, 5678B" into teams and the season to rate them in. */
+async function resolveRankingGroup(q) {
+  if (/^RE-/i.test(q)) {
+    const ev = (await api(`/events?sku[]=${encodeURIComponent(q.toUpperCase())}`)).data?.[0];
+    if (!ev) return { error: `No event found with SKU ${q}.` };
+    return { teams: await apiAll(`/events/${ev.id}/teams`), seasonId: ev.season?.id || state.seasonId, title: ev.name, missing: [] };
+  }
+  const nums = [...new Set(q.split(/[\s,]+/).map((s) => s.toUpperCase()).filter(Boolean))];
+  const found = await pool(nums, 3, (n) => findTeam(n));
+  return { teams: found.filter(Boolean), seasonId: state.seasonId, title: `${found.filter(Boolean).length} teams`, missing: nums.filter((_, i) => !found[i]) };
+}
+
+async function renderRankings(query) {
+  const q = (new URLSearchParams(query).get('q') || '').trim();
+  const starred = Object.entries(state.notes).filter(([, n]) => n.starred).map(([k]) => k);
+  setChrome({ nav: 'rankings', crumbs: [{ icon: 'rank', label: 'Rankings' }] });
+  app.innerHTML = `<div class="ph"><div><h1>Rankings</h1><div class="meta"><span>Rank a group of teams by KScout rating</span></div></div></div>
+    <div class="grid">
+      ${card({ cls: 'c12', title: 'Teams to rank', body: `<form class="hero-search" id="rkForm"><input class="input" id="rkInput" placeholder="Event SKU like RE-V5RC-26-1234, or team numbers: 1234A, 5678B" value="${esc(q)}" aria-label="Event SKU or team numbers"/><button class="btn primary">Rank</button></form>
+        ${starred.length ? `<div class="examples"><a href="#/rankings?q=${encodeURIComponent(starred.join(','))}">Rank my watchlist</a></div>` : ''}` })}
+      <div class="c12" id="rkOut"></div>
+      ${card({ cls: 'c12', title: 'How the rating works', body: ratingExplainer() })}
+    </div>`;
+  document.getElementById('rkForm').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const v = document.getElementById('rkInput').value.trim();
+    const next = v ? `#/rankings?q=${encodeURIComponent(v)}` : '#/rankings';
+    if (location.hash === next) route(); else location.hash = next;
+  });
+  if (!q) return;
+  const out = document.getElementById('rkOut');
+  out.innerHTML = '<div class="loading">Finding teams…</div>';
+  try {
+    const group = await resolveRankingGroup(q);
+    if (group.error) { out.innerHTML = `<div class="error">${esc(group.error)}</div>`; return; }
+    const missing = group.missing.length ? `<div class="error">Not found: ${group.missing.map(esc).join(', ')}.</div>` : '';
+    if (!group.teams.length) { out.innerHTML = missing || '<div class="empty">No teams are registered for this event yet.</div>'; return; }
+    if (group.teams.length > RATING_MAX_TEAMS) { out.innerHTML = `<div class="error">That's ${group.teams.length} teams. Rankings can load up to ${RATING_MAX_TEAMS} at once, so enter the teams you want by number.</div>`; return; }
+    out.innerHTML = `<div class="loading">Rating ${group.teams.length} team${group.teams.length === 1 ? '' : 's'}… <span id="rkProg"></span><div class="progress"><i id="rkBar"></i></div></div>`;
+    let done = 0;
+    const rows = await pool(group.teams, 3, async (team) => {
+      const d = await loadTeamSeason(team.id, group.seasonId, ['events', 'rankings', 'skills']);
+      const kr = await loadRating(team, d, group.seasonId);
+      done++;
+      const p = document.getElementById('rkProg'), b = document.getElementById('rkBar');
+      if (p) p.textContent = `${done} of ${group.teams.length}`;
+      if (b) b.style.width = `${(done / group.teams.length) * 100}%`;
+      return { team, kr };
+    });
+    if (!out.isConnected) return;
+    assignPlaces(rows, (r) => r.kr?.rating ?? null);
+    const measure = (k, label) => ({ key: k, label, num: true, val: (r) => r.kr?.breakdown[k], html: (r) => measurePct(r.kr?.breakdown[k]) });
+    out.innerHTML = `${missing}${card({ title: esc(group.title), aside: `${rows.filter((r) => r.kr).length} of ${rows.length} rated`, bodyCls: 'flush', body: '<div id="rkTable"></div>' })}`;
+    sortableTable(document.getElementById('rkTable'), [
+      { key: 'place', label: '#', num: true, val: (r) => r.place },
+      { key: 'num', label: 'Team', val: (r) => r.team.number, html: (r) => teamLink(r.team.number) },
+      { key: 'name', label: 'Name', val: (r) => r.team.team_name },
+      { key: 'rating', label: 'KScout', num: true, val: (r) => r.kr?.rating, html: (r) => (r.kr ? `<b>${fmt1(r.kr.rating)}</b>` : '<span class="muted">—</span>') },
+      { key: 'conf', label: 'Confidence', val: (r) => r.kr?.events.length, html: (r) => (r.kr ? esc(r.kr.confidence) : '<span class="muted">No events</span>') },
+      { key: 'events', label: 'Events', num: true, val: (r) => r.kr?.events.length },
+      { key: 'skills', label: 'Skills', num: true, val: (r) => r.kr?.skillsPart, html: (r) => measurePct(r.kr?.skillsPart) },
+      measure('contribution', 'Contribution'), measure('qualifying', 'Qualifying'), measure('playoffs', 'Playoffs'),
+    ], rows, { sortKey: 'rating' });
+  } catch (e) {
+    if (e instanceof ApiError && e.status === 401) throw e;
+    if (out.isConnected) out.innerHTML = `<div class="error">${esc(e.status === 429 ? 'Too many requests right now. Wait a minute and try again.' : e.message || e)}</div>`;
+  }
+}
+
 // ---------------------------------------------------------------- router & boot
 function go(v) {
   v = String(v || '').trim();
@@ -753,6 +870,7 @@ async function route() {
     else if (view === 'event' && arg) await renderEvent(decodeURIComponent(arg));
     else if (view === 'watchlist') renderWatchlist();
     else if (view === 'compare') await renderCompare(query);
+    else if (view === 'rankings') await renderRankings(query);
     else if (view === 'settings') renderSettings();
     else renderHome();
   } catch (e) { showError(e); }
