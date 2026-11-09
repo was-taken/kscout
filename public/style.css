@@ -260,6 +260,27 @@ textarea::placeholder { color: var(--muted); }
 .setup ol li { margin-bottom: 4px; }
 .setup ol a { text-decoration: underline; text-underline-offset: 2px; }
 .best { color: var(--good); font-weight: 600; }
+.rating { display: flex; gap: 32px; align-items: center; }
+.rating-n { flex: 0 0 auto; min-width: 120px; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.rating-n .big { font-size: 40px; font-weight: 600; letter-spacing: -0.03em; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.rating-n .lbl { color: var(--muted); font-size: 12px; }
+.rating-m { flex: 1; min-width: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 12px 28px; }
+.rating-note { grid-column: 1 / -1; color: var(--muted); font-size: 12px; }
+.meter-h { display: flex; justify-content: space-between; gap: 8px; font-size: 12.5px; color: var(--text-2); margin-bottom: 5px; }
+.meter-h b { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }
+.meter-t { height: 6px; border-radius: 4px; background: var(--hover); overflow: hidden; }
+.meter-t i { display: block; height: 100%; border-radius: 4px; background: var(--s1); }
+.rating-ev { margin-top: 16px; border-top: 1px solid var(--line-2); padding-top: 12px; }
+.rating-ev summary { cursor: pointer; color: var(--text-2); font-size: 12.5px; }
+.rating-ev .tbl-wrap { margin-top: 10px; }
+.prose { color: var(--text-2); line-height: 1.55; max-width: 76ch; }
+.prose p { margin: 0 0 10px; }
+.prose p:last-child { margin-bottom: 0; }
+.prose ol { margin: 0 0 10px; padding-left: 20px; }
+.prose li { margin-bottom: 6px; }
+.prose b { color: var(--text); font-weight: 600; }
+@media (max-width: 860px) { .rating { flex-direction: column; align-items: stretch; gap: 18px; } }
+@media (max-width: 520px) { .rating-m { grid-template-columns: 1fr; } }
 .progress { height: 4px; background: var(--hover); border-radius: 4px; overflow: hidden; margin-top: 12px; }
 .progress i { display: block; height: 100%; background: var(--text); width: 0; transition: width .2s; }
 

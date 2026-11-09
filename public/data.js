@@ -30,7 +30,13 @@ const ls = {
 class ApiError extends Error { constructor(status, msg) { super(msg); this.status = status; } }
 
 async function api(path) {
-  const r = await fetch('/api' + path);
+  let r;
+  // Big rankings can hit a per-minute limit. Waiting long enough lets the limit reset.
+  for (let attempt = 1; ; attempt++) {
+    r = await fetch('/api' + path);
+    if (r.status !== 429 || attempt > 5) break;
+    await sleep(attempt * 5000);
+  }
   if (r.status === 401) { const b = await r.json().catch(() => ({})); throw new ApiError(401, b.error === 'no_token' ? 'no_token' : 'VEX Events rejected the API token. It may be expired or not yet approved — paste a new one below.'); }
   if (!r.ok) throw new ApiError(r.status, `VEX Events API request failed (HTTP ${r.status}) for ${path}`);
   return r.json();

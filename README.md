@@ -16,6 +16,7 @@ Data comes from the official [VEX Events API](https://events.vex.com/api/v2) (fo
 - **Event page:** rankings for each division with computed **OPR / DPR / CCWM**, skills standings, match results and awards.
 - **Pre-scout:** season stats for every team registered at an upcoming event in one sortable table, so you can scout before it starts.
 - **Compare:** up to 6 teams side by side, with the best value in each row highlighted.
+- **KScout rating:** one 0–100 number per team, with the breakdown behind it. See it on team pages, in Compare and Pre-scout, or rank any event or list of teams on the **Rankings** page.
 - **Watchlist and notes:** star teams, rate them 1–5, tag them (strong auton, good defense, alliance pick…) and write notes. Export to CSV, or back up and restore as JSON.
 - **Season picker** for past seasons, **light and dark mode**, and a layout that works on phones.
 
@@ -75,6 +76,37 @@ The host sets `PORT` itself. A health check is at `/healthz`.
 - **OPR** (offensive power rating) estimates how many points a team adds to its alliance each qualification match, using a least-squares fit over every qualification match at the event. **DPR** does the same for points allowed, and **CCWM** is OPR − DPR. These only become reliable after several matches.
 - **Best skills** is the best driver + autonomous total from a single event.
 
+### KScout rating
+
+A 0–100 estimate of how strong a team has been this season: **60% match results and 40% Robot Skills**. A team needs at least one finished event with qualification matches. The formula and its tunable numbers are in [`public/rating.js`](public/rating.js).
+
+**1. Percentile at each event.** Three measures, each the share of the team's division it beat (ties count half):
+
+| Measure | Weight | From |
+|---|---|---|
+| Match contribution | 45% | CCWM over qualification matches, which separates a team from its partners. Needs at least 3 matches. |
+| Playoff run | 30% | Furthest elimination round reached, with the champions above the finalists. |
+| Qualifying finish | 25% | Qualification rank. |
+
+`P = Σ(weight × measure) / Σ(weight)`, over the measures that have data at that event.
+
+**2. Event score.** `S = low + (high − low) × P`, using the range for the event's level:
+
+| Level | Range |
+|---|---|
+| World Championship | 40–100 |
+| Signature, National | 25–95 |
+| State, Regional | 15–90 |
+| Other tournaments | 0–85 |
+
+**3. Results score.** `Results = (42.5 + Σ wᵢSᵢ) / (1 + Σ wᵢ)`, where `wᵢ = 0.85^(events since) × min(1, division teams / 24)`. The 42.5 and 1 act as one average event in every team's history, so one good day can't top the list.
+
+**4. Rating.** `Rating = 0.6 × Results + 0.4 × 100 × min(1, best skills / season top)`. Best skills is the team's highest driver + autonomous total from one event. Season top is the highest total at any finished Signature event or Worlds that season. Until one has finished, the rating is the results score alone.
+
+Divisions under 4 teams and events still in progress are skipped. Confidence is Low for 1 counted event, Medium for 2–3 and High for 4 or more.
+
+The rating covers groups you choose because VEX Events has no single request for every team's season. It reflects results only, and is an estimate rather than a measure of true strength.
+
 ## Project layout
 
 ```
@@ -82,6 +114,7 @@ server.js           Node server: static files, VEX Events proxy and cache, notes
 public/index.html   Page shell (sidebar, top bar)
 public/app.js       Pages, tables, charts
 public/data.js      API calls, notes storage, stat calculations
+public/rating.js    KScout rating formula
 public/style.css    Styles and light/dark themes
 render.yaml         One-click Render setup
 ```
