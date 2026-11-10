@@ -434,7 +434,7 @@ async function renderTeam(number) {
   document.getElementById('starBtn').addEventListener('click', onStar);
   bindNotes(team.number);
   loadRating(team, d, state.seasonId).then(
-    (r) => { const el = document.getElementById('ratingBody'); if (el) { el.classList.remove('muted'); el.innerHTML = ratingHtml(r); } },
+    (r) => { const el = document.getElementById('ratingBody'); if (el) { el.classList.remove('muted'); el.innerHTML = ratingHtml(r); showWorldPlace(team.id); } },
     () => { const el = document.getElementById('ratingBody'); if (el) el.textContent = 'The rating could not be loaded. Reload the page to try again.'; },
   );
 
@@ -773,7 +773,7 @@ function ratingExplainer() {
       <li><b>Add Robot Skills.</b> The team's best driver + autonomous total this season, as a share of the top total at any finished Signature event or Worlds, counts for ${skillsPct}%. If the season has no finished event of that kind yet, the rating is the results score alone.</li>
     </ol>
     <p>Tested on two 2026 Worlds divisions (Science and Technology), using only results from before Worlds. Picking the alliance with the higher combined rating called 73% of qualification matches. Best skills alone called 67–69% and win rate 61–64%.</p>
-    <p class="muted">It only sees what the results show. A team's real strength can differ, especially early in the season or if the robot has changed. VEX Events has no way to load every team at once, so rankings cover a group you choose rather than the whole world.</p>
+    <p class="muted">It only sees what the results show. A team's real strength can differ, especially early in the season or if the robot has changed. The all-teams list is a snapshot from when it was last generated, so a team page can be slightly newer.</p>
   </div>`;
 }
 
@@ -789,21 +789,115 @@ async function resolveRankingGroup(q) {
   return { teams: found.filter(Boolean), seasonId: state.seasonId, title: `${found.filter(Boolean).length} teams`, missing: nums.filter((_, i) => !found[i]) };
 }
 
+// The all-teams list is generated ahead of time by scripts/build-rankings.js.
+const worldCache = new Map();
+function loadWorld(seasonId) {
+  if (!worldCache.has(seasonId)) {
+    const p = fetch(`/rankings/${seasonId}.json`).then((r) => (r.ok ? r.json().catch(() => null) : null));
+    worldCache.set(seasonId, p);
+    p.then((w) => { if (!w) worldCache.delete(seasonId); }, () => worldCache.delete(seasonId));
+  }
+  return worldCache.get(seasonId);
+}
+
+function showWorldPlace(teamId) {
+  loadWorld(state.seasonId).then((w) => {
+    const row = w?.teams.find((t) => t.id === teamId);
+    const box = document.querySelector('#ratingBody .rating-n');
+    if (row && box) box.insertAdjacentHTML('beforeend', pill(`World #${row.place.toLocaleString()} of ${w.teams.length.toLocaleString()}`));
+  }).catch(() => {});
+}
+
+const rankingHead = (active, sub) => `<div class="ph"><div><h1>Rankings</h1><div class="meta"><span id="rkMeta">${sub}</span></div></div>
+  <div class="seg">${[['all', 'All teams', '#/rankings'], ['group', 'Event or list', '#/rankings?view=group']].map(([id, label, href]) => `<button class="${id === active ? 'on' : ''}" data-go="${href}">${label}</button>`).join('')}</div></div>`;
+const bindRankingTabs = () => app.querySelectorAll('[data-go]').forEach((b) => b.addEventListener('click', () => { location.hash = b.dataset.go; }));
+
+async function renderWorldRankings() {
+  const WORLD_PAGE_SIZE = 50;
+  setChrome({ nav: 'rankings', crumbs: [{ icon: 'rank', label: 'Rankings' }] });
+  app.innerHTML = `${rankingHead('all', `${esc(seasonName())} season`)}
+    <div class="grid"><div class="c12" id="wrOut"><div class="loading">Loading rankings…</div></div>
+      ${card({ cls: 'c12', title: 'How the rating works', body: ratingExplainer() })}</div>`;
+  bindRankingTabs();
+  const out = document.getElementById('wrOut');
+  const world = await loadWorld(state.seasonId);
+  if (!out.isConnected) return;
+  if (!world) {
+    out.innerHTML = card({ title: 'All teams', body: `<div class="prose"><p>The all-teams list hasn't been generated for this season yet. On the computer running KScout, run:</p><p><code>npm run rankings -- ${esc(state.seasonId)}</code></p><p>Or use <a class="lnk" href="#/rankings?view=group">Event or list</a> to rank a group of teams now.</p></div>` });
+    return;
+  }
+  document.getElementById('rkMeta').textContent = `${seasonName()} season · ${world.teams.length.toLocaleString()} teams · ${world.eventsCounted.toLocaleString()} events · updated ${relTime(world.generatedAt)}`;
+
+  const filters = { grade: '', country: '', region: '', search: '' };
+  let page = 0;
+  const unique = (rows, key) => [...new Set(rows.map((t) => t[key]).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+  const optionsHtml = (label, values, current) => `<option value="">${label}</option>${values.map((v) => `<option value="${esc(v)}" ${v === current ? 'selected' : ''}>${esc(v)}</option>`).join('')}`;
+  out.innerHTML = card({
+    title: 'All teams', aside: 'Teams with at least one finished event', bodyCls: 'flush',
+    body: `<div class="wr-filters">
+      <input class="input" id="wrSearch" placeholder="Find a team" aria-label="Find a team by number or name"/>
+      <select class="input" id="wrGrade" aria-label="Grade">${optionsHtml('All grades', unique(world.teams, 'grade'), '')}</select>
+      <select class="input" id="wrCountry" aria-label="Country">${optionsHtml('All countries', unique(world.teams, 'country'), '')}</select>
+      <select class="input" id="wrRegion" aria-label="Region" disabled>${optionsHtml('All regions', [], '')}</select>
+    </div><div id="wrTable"></div>`,
+  });
+
+  const table = document.getElementById('wrTable');
+  const draw = () => {
+    const inGroup = world.teams.filter((t) => (!filters.grade || t.grade === filters.grade) && (!filters.country || t.country === filters.country) && (!filters.region || t.region === filters.region));
+    const position = new Map();
+    inGroup.forEach((t, i) => position.set(t.id, i && t.rating === inGroup[i - 1].rating ? position.get(inGroup[i - 1].id) : i + 1));
+    const needle = filters.search.toLowerCase();
+    const shown = needle ? inGroup.filter((t) => t.number.toLowerCase().includes(needle) || t.name.toLowerCase().includes(needle)) : inGroup;
+    const pages = Math.max(1, Math.ceil(shown.length / WORLD_PAGE_SIZE));
+    page = Math.min(page, pages - 1);
+    const from = page * WORLD_PAGE_SIZE;
+    const filtered = Boolean(filters.grade || filters.country || filters.region);
+    const heads = [...(filtered ? ['#'] : []), 'World', 'Team', 'Name', 'Region', 'KScout', 'Confidence', 'Events', 'Skills', 'Contribution', 'Qualifying', 'Playoffs'];
+    const numeric = new Set(['#', 'World', 'KScout', 'Events', 'Skills', 'Contribution', 'Qualifying', 'Playoffs']);
+    table.innerHTML = `<div class="tbl-wrap"><table class="tbl"><thead><tr>${heads.map((h) => `<th class="${numeric.has(h) ? 'num' : ''}">${h}</th>`).join('')}</tr></thead><tbody>
+      ${shown.slice(from, from + WORLD_PAGE_SIZE).map((t) => `<tr>${filtered ? `<td class="num">${position.get(t.id).toLocaleString()}</td>` : ''}
+        <td class="num">${t.place.toLocaleString()}</td><td>${teamLink(t.number)}</td><td>${esc(t.name)}</td><td>${esc([t.region, t.country].filter(Boolean).join(', '))}</td>
+        <td class="num"><b>${fmt1(t.rating)}</b></td><td>${esc(t.confidence)}</td><td class="num">${t.events}</td>
+        <td class="num">${measurePct(t.skills)}</td><td class="num">${measurePct(t.contribution)}</td><td class="num">${measurePct(t.qualifying)}</td><td class="num">${measurePct(t.playoffs)}</td></tr>`).join('') || `<tr><td colspan="${heads.length}" class="muted" style="text-align:center;padding:28px">No teams match.</td></tr>`}
+      </tbody></table></div>
+      <div class="pager"><span>${shown.length ? `${(from + 1).toLocaleString()}–${Math.min(from + WORLD_PAGE_SIZE, shown.length).toLocaleString()} of ${shown.length.toLocaleString()}` : '0 teams'}</span>
+        <span><button class="btn" id="wrPrev" ${page ? '' : 'disabled'}>Previous</button> <button class="btn" id="wrNext" ${page < pages - 1 ? '' : 'disabled'}>Next</button></span></div>`;
+    document.getElementById('wrPrev').addEventListener('click', () => { page--; draw(); window.scrollTo(0, 0); });
+    document.getElementById('wrNext').addEventListener('click', () => { page++; draw(); window.scrollTo(0, 0); });
+  };
+  const apply = () => { page = 0; draw(); };
+  document.getElementById('wrSearch').addEventListener('input', (e) => { filters.search = e.target.value.trim(); apply(); });
+  document.getElementById('wrGrade').addEventListener('change', (e) => { filters.grade = e.target.value; apply(); });
+  document.getElementById('wrRegion').addEventListener('change', (e) => { filters.region = e.target.value; apply(); });
+  document.getElementById('wrCountry').addEventListener('change', (e) => {
+    filters.country = e.target.value; filters.region = '';
+    const region = document.getElementById('wrRegion');
+    region.innerHTML = optionsHtml('All regions', unique(world.teams.filter((t) => t.country === filters.country), 'region'), '');
+    region.disabled = !filters.country;
+    apply();
+  });
+  draw();
+}
+
 async function renderRankings(query) {
-  const q = (new URLSearchParams(query).get('q') || '').trim();
+  const params = new URLSearchParams(query);
+  const q = (params.get('q') || '').trim();
+  if (!q && params.get('view') !== 'group') return renderWorldRankings();
   const starred = Object.entries(state.notes).filter(([, n]) => n.starred).map(([k]) => k);
   setChrome({ nav: 'rankings', crumbs: [{ icon: 'rank', label: 'Rankings' }] });
-  app.innerHTML = `<div class="ph"><div><h1>Rankings</h1><div class="meta"><span>Rank a group of teams by KScout rating</span></div></div></div>
+  app.innerHTML = `${rankingHead('group', 'Rank an event or your own list of teams')}
     <div class="grid">
       ${card({ cls: 'c12', title: 'Teams to rank', body: `<form class="hero-search" id="rkForm"><input class="input" id="rkInput" placeholder="Event SKU like RE-V5RC-26-1234, or team numbers: 1234A, 5678B" value="${esc(q)}" aria-label="Event SKU or team numbers"/><button class="btn primary">Rank</button></form>
         ${starred.length ? `<div class="examples"><a href="#/rankings?q=${encodeURIComponent(starred.join(','))}">Rank my watchlist</a></div>` : ''}` })}
       <div class="c12" id="rkOut"></div>
       ${card({ cls: 'c12', title: 'How the rating works', body: ratingExplainer() })}
     </div>`;
+  bindRankingTabs();
   document.getElementById('rkForm').addEventListener('submit', (e) => {
     e.preventDefault();
     const v = document.getElementById('rkInput').value.trim();
-    const next = v ? `#/rankings?q=${encodeURIComponent(v)}` : '#/rankings';
+    const next = v ? `#/rankings?q=${encodeURIComponent(v)}` : '#/rankings?view=group';
     if (location.hash === next) route(); else location.hash = next;
   });
   if (!q) return;

@@ -7,7 +7,8 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "check": "node --check server.js && node --check public/data.js && node --check public/rating.js && node --check public/app.js"
+    "rankings": "node scripts/build-rankings.js",
+    "check": "node --check server.js && node --check scripts/build-rankings.js && node --check public/data.js && node --check public/rating.js && node --check public/app.js"
   },
   "engines": {
     "node": ">=18"
