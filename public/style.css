@@ -260,6 +260,9 @@ textarea::placeholder { color: var(--muted); }
 .setup ol li { margin-bottom: 4px; }
 .setup ol a { text-decoration: underline; text-underline-offset: 2px; }
 .best { color: var(--good); font-weight: 600; }
+.wr-filters { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px 14px; border-bottom: 1px solid var(--line-2); }
+.wr-filters .input { flex: 1 1 150px; width: auto; min-width: 0; }
+.pager { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 14px; border-top: 1px solid var(--line-2); color: var(--muted); font-size: 12.5px; font-variant-numeric: tabular-nums; }
 .rating { display: flex; gap: 32px; align-items: center; }
 .rating-n { flex: 0 0 auto; min-width: 120px; display: flex; flex-direction: column; align-items: center; gap: 4px; }
 .rating-n .big { font-size: 40px; font-weight: 600; letter-spacing: -0.03em; line-height: 1.1; font-variant-numeric: tabular-nums; }

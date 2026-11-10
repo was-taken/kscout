@@ -16,7 +16,7 @@ Data comes from the official [VEX Events API](https://events.vex.com/api/v2) (fo
 - **Event page:** rankings for each division with computed **OPR / DPR / CCWM**, skills standings, match results and awards.
 - **Pre-scout:** season stats for every team registered at an upcoming event in one sortable table, so you can scout before it starts.
 - **Compare:** up to 6 teams side by side, with the best value in each row highlighted.
-- **KScout rating:** one 0–100 number per team, with the breakdown behind it. See it on team pages, in Compare and Pre-scout, or rank any event or list of teams on the **Rankings** page.
+- **KScout rating:** one 0–100 number per team, with the breakdown behind it. See it on team pages, in Compare and Pre-scout. The **Rankings** page lists every rated team worldwide, with grade, country and region filters, or ranks any event or list of teams.
 - **Watchlist and notes:** star teams, rate them 1–5, tag them (strong auton, good defense, alliance pick…) and write notes. Export to CSV, or back up and restore as JSON.
 - **Season picker** for past seasons, **light and dark mode**, and a layout that works on phones.
 
@@ -105,7 +105,19 @@ A 0–100 estimate of how strong a team has been this season: **60% match result
 
 Divisions under 4 teams and events still in progress are skipped. Confidence is Low for 1 counted event, Medium for 2–3 and High for 4 or more.
 
-The rating covers groups you choose because VEX Events has no single request for every team's season. It reflects results only, and is an estimate rather than a measure of true strength.
+The rating reflects results only, and is an estimate rather than a measure of true strength.
+
+### All-teams rankings
+
+VEX Events has no single request for every team's results, so the all-teams list is generated ahead of time. It reads every event in the season, which takes thousands of requests the first time:
+
+```bash
+npm run rankings
+```
+
+This writes `public/rankings/<season id>.json`, using the same formula as the team pages. To build a past season, add its id: `npm run rankings -- 197`. Run it again whenever you want newer results; later runs skip events that finished more than 14 days before they were last read. If a run stops, running it again picks up where it left off.
+
+On a hosted site, generate the file and deploy it with the site. Every run uses your API token, so check the terms you agreed to first.
 
 ## Project layout
 
@@ -116,6 +128,7 @@ public/app.js       Pages, tables, charts
 public/data.js      API calls, notes storage, stat calculations
 public/rating.js    KScout rating formula
 public/style.css    Styles and light/dark themes
+scripts/build-rankings.js  Generates the all-teams rankings
 render.yaml         One-click Render setup
 ```
 
